@@ -7,7 +7,8 @@ class Program{
 
         var running = true;
         var text = "";
-        var fontsize = 25;
+        var fontsize = 18;
+        var linesize = fontsize*1.5;
         var font = pygame.font.Font("RedditMono-Medium.ttf", fontsize)
         pygame.key.set_repeat(500,25);
 
@@ -27,11 +28,11 @@ class Program{
                 }
             }
             screen.fill((220, 220, 220))
-            var y=fontsize
+            var y=fontsize*0.5;
             foreach(var l in text.split('\n')){
                 var img = font.render(l, true, (0,20,45));
                 screen.blit(img, (20, y));
-                y+=fontsize;
+                y+=linesize;
             }
             pygame.display.flip();
         }

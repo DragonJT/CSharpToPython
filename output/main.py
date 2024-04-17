@@ -4,7 +4,8 @@ def Main():
     screen=pygame.display.set_mode((1280,780))
     running=True
     text=""
-    fontsize=25
+    fontsize=18
+    linesize=fontsize*1.5
     font=pygame.font.Font("RedditMono-Medium.ttf",fontsize)
     pygame.key.set_repeat(500,25)
     while running:
@@ -22,11 +23,11 @@ def Main():
             if event.type==pygame.QUIT:
                 running=False
         screen.fill((220,220,220))
-        y=fontsize
+        y=fontsize*0.5
         for l in text.split('\n'):
             img=font.render(l,True,(0,20,45))
             screen.blit(img,(20,y))
-            y+=fontsize
+            y+=linesize
         pygame.display.flip()
     pygame.quit()
 Main()

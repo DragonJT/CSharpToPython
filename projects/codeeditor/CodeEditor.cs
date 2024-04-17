@@ -1,4 +1,5 @@
 using pygame;
+using subprocess;
 
 class CodeEditor{
     string text;
@@ -17,16 +18,19 @@ class CodeEditor{
         font = pygame.font.Font("RedditMono-Medium.ttf", fontsize);
     }
 
-    void Insert(string value){
-        text = text[..cursor] + value + text[cursor..];
+    void SetText(string _text){
+        text = _text;
         lines = text.split('\n');
+    }
+
+    void Insert(string value){
+        SetText(text[..cursor] + value + text[cursor..]);
         cursor+=len(value);
     }
 
     void Backspace(){
         if(cursor>0){
-            text = text[..(cursor-1)] + text[cursor..];
-            lines = text.split('\n');
+            SetText(text[..(cursor-1)] + text[cursor..]);
             cursor--;
         }
     }
@@ -76,33 +80,72 @@ class CodeEditor{
 }
 
 class Program{
+
+    static string ReadFile(string path){
+        var f = open(path, 'r');
+        var content = f.read();
+        f.close();
+        return content;
+    }
+
+    static void WriteFile(string path, string content){
+        var f = open(path, 'w');
+        f.write(content);
+        f.close();
+    }
+
     static void Main(){
         pygame.init();
         var surface = pygame.display.set_mode((1280, 780));
         var codeEditor = new CodeEditor();
+        codeEditor.SetText(ReadFile("projects/test/Test.cs"));
         var running = true;
         pygame.key.set_repeat(500,25);
-        
+        var globals={"rects"=[]};
         while(running){
+            var keys = pygame.key.get_pressed();
             foreach(var @event in pygame.@event.@get()){
                 if(@event.type == pygame.KEYDOWN){
-                    if(@event.key == pygame.K_RETURN){
-                        codeEditor.Insert("\n");
-                    }else if(@event.key == pygame.K_BACKSPACE){
-                        codeEditor.Backspace();
-                    }else if(@event.key == pygame.K_LEFT){
-                        codeEditor.CursorLeft();
-                    }else if(@event.key == pygame.K_RIGHT){
-                        codeEditor.CursorRight();
+                    if(keys[pygame.K_LCTRL]){
+                        if(@event.key == pygame.K_r){
+                            WriteFile("projects/test/Test.cs", codeEditor.text);
+                            var result = subprocess.run(["compiler\\bin\\Debug\\net8.0\\CSharpToPython.exe", "projects/test/Test.cs--projects/test/Test.py"], 
+                                shell:true, capture_output:true, text:true).stdout;
+                            if(result == "ERROR"){
+                                print(ReadFile("projects/test/Test.py"));
+                            }
+                            else{
+                                exec(ReadFile("projects/test/Test.py"), globals);
+                            }
+                        }
+                        else if(@event.key == pygame.K_s){
+                            WriteFile("projects/test/Test.cs", codeEditor.text);
+                        }
                     }else{
-                        codeEditor.Insert(@event.unicode);
+                        if(@event.key == pygame.K_RETURN){
+                            codeEditor.Insert("\n");
+                        }else if(@event.key == pygame.K_TAB){
+                            codeEditor.Insert("    ");
+                        }else if(@event.key == pygame.K_BACKSPACE){
+                            codeEditor.Backspace();
+                        }else if(@event.key == pygame.K_LEFT){
+                            codeEditor.CursorLeft();
+                        }else if(@event.key == pygame.K_RIGHT){
+                            codeEditor.CursorRight();
+                        }else{
+                            codeEditor.Insert(@event.unicode);
+                        }
                     }
                 }
+                
                 if(@event.type == pygame.QUIT){
                     running = false;
                 }
             }
             codeEditor.Draw(surface);
+            foreach(var r in globals["rects"]){
+                pygame.draw.rect(surface, (0,0,255), pygame.Rect(r[0],r[1],r[2],r[3]));
+            }
             pygame.display.flip();
         }
         pygame.quit();

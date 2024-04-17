@@ -1,13 +1,16 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis;
-using System.Security.Cryptography;
 
-class Class(string name)
-{
+class Method(bool isStatic, string name){
+    public bool isStatic = isStatic;
+    public string name = name;
+}
+
+class Class(string name){
     public string name = name;
     public List<string> fields = [];
-    public List<string> methods = [];
+    public List<Method> methods = [];
 }
 
 class Python{
@@ -25,6 +28,9 @@ class Python{
         if(c=='\n'){
             return "\\n";
         }
+        if(c=='\\'){
+            return "\\\\";
+        }
         return c.ToString();
     }
 
@@ -40,6 +46,10 @@ class Python{
         var output="(";
         var args = arglist.Arguments.ToArray();
         for(var i=0;i<args.Length;i++){
+            var name = args[i].NameColon;
+            if(name!=null){
+                output+=GetExpression(name.Expression)+"=";
+            }
             output+=GetExpression(args[i].Expression);
             if(i<args.Length-1){
                 output+=",";
@@ -62,14 +72,24 @@ class Python{
             names.Insert(0, GetIdentifier(memberAccessExpressionSyntax.Name.Identifier));
             expression = memberAccessExpressionSyntax.Expression;
         }
-        if(expression is IdentifierNameSyntax identifierNameSyntax){
+        if(expression is ThisExpressionSyntax){
+            names.Insert(0, "self");
+            return GetFullname(names);
+        }
+        else if(expression is IdentifierNameSyntax identifierNameSyntax){
             var name = GetIdentifier(identifierNameSyntax.Identifier);
             var c = classStack[classStack.Count-1];
-            if(name == "this"){
+            if(c.fields.Contains(name)){ 
                 names.Insert(0, "self");
+                names.Insert(1, name);
             }
-            else if(c.fields.Contains(name) || c.methods.Contains(name)){
-                names.Insert(0, "self");
+            else if(c.methods.Any(m=>m.name == name)){
+                var method = c.methods.First(m=>m.name == name);
+                if(method.isStatic){
+                    names.Insert(0, c.name);
+                }else{
+                    names.Insert(0, "self");
+                }
                 names.Insert(1, name);
             }
             else{
@@ -90,17 +110,39 @@ class Python{
         };
     }
 
-    string GetExpression(ExpressionSyntax expression){
+    string GetExpression(ExpressionSyntax expression, bool isDictionary = false){
+        if(isDictionary){
+            Console.WriteLine(expression.GetType().Name+"__"+expression.ToFullString());
+        }
         if(expression is InvocationExpressionSyntax invocationExpressionSyntax){
             return GetExpression(invocationExpressionSyntax.Expression) + GetArguments(invocationExpressionSyntax.ArgumentList);
         }
         else if(expression is CollectionExpressionSyntax collectionExpressionSyntax){
-            if(collectionExpressionSyntax.Elements.Count == 0){
-                return "[]";
+            var elements = collectionExpressionSyntax.Elements.ToArray();
+            var output = "[";
+            for(var i=0;i<elements.Length;i++){
+                if(elements[i] is ExpressionElementSyntax expressionElementSyntax){
+                    output+=GetExpression(expressionElementSyntax.Expression);
+                }
+                else{
+                    throw new Exception(elements[i].GetType().Name);
+                }
+                if(i<elements.Length-1){
+                    output+=",";
+                }
             }
-            else{
-                throw new Exception(collectionExpressionSyntax.ToFullString());
+            return output+"]";
+        }
+        else if(expression is InitializerExpressionSyntax initializerExpressionSyntax){
+            var output = "{";
+            var expressions = initializerExpressionSyntax.Expressions.ToArray();
+            for(var i=0;i<expressions.Length;i++){
+                output+=GetExpression(expressions[i], true);
+                if(i<expressions.Length-1){
+                    output+=",";
+                }
             }
+            return output+"}";
         }
         else if(expression is ObjectCreationExpressionSyntax objectCreationExpressionSyntax){
             return objectCreationExpressionSyntax.Type.ToString() + GetArguments(objectCreationExpressionSyntax.ArgumentList!);
@@ -138,9 +180,11 @@ class Python{
             return GetMemberOrIdentifierExpression(expression);
         }
         else if(expression is AssignmentExpressionSyntax assignmentExpressionSyntax){
-            return GetExpression(assignmentExpressionSyntax.Left)
-                +assignmentExpressionSyntax.OperatorToken.ValueText
-                +GetExpression(assignmentExpressionSyntax.Right);
+            var op = assignmentExpressionSyntax.OperatorToken.ValueText;
+            if(isDictionary && assignmentExpressionSyntax.OperatorToken.ValueText=="="){
+                op = ":";
+            }
+            return GetExpression(assignmentExpressionSyntax.Left)+op+GetExpression(assignmentExpressionSyntax.Right);
         }
         else if(expression is ElementAccessExpressionSyntax elementAccessExpressionSyntax){
             return GetExpression(elementAccessExpressionSyntax.Expression)+"["
@@ -192,7 +236,7 @@ class Python{
         if(@else != null){
             if(@else.Statement is IfStatementSyntax elseifStatementSyntax){
                 return GetLeadingWS(depth) + "elif "+GetExpression(elseifStatementSyntax.Condition)+":\n"
-                    + GetBlock(@else.Statement, depth)
+                    + GetBlock(@elseifStatementSyntax.Statement, depth)
                     + GetElse(elseifStatementSyntax.Else, depth);
             }
             else{
@@ -224,6 +268,10 @@ class Python{
                 + GetBlock(ifStatementSyntax.Statement, depth)
                 + GetElse(ifStatementSyntax.Else, depth);            
         }
+        else if(statement is ReturnStatementSyntax returnStatementSyntax){
+            var rtnExpression = returnStatementSyntax.Expression!=null?" "+GetExpression(returnStatementSyntax.Expression):"";
+            return GetLeadingWS(depth) + "return"+rtnExpression+"\n";
+        }
         throw new Exception(statement.GetType().Name);
     }
 
@@ -253,7 +301,8 @@ class Python{
                 }
             }
             else if(m is MethodDeclarationSyntax methodDeclarationSyntax){
-                @class.methods.Add(GetIdentifier(methodDeclarationSyntax.Identifier));
+                bool isStatic = methodDeclarationSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+                @class.methods.Add(new Method(isStatic, GetIdentifier(methodDeclarationSyntax.Identifier)));
             }
         }
         return @class;
@@ -281,7 +330,7 @@ class Python{
                 output+="self";
             }
             for(var i=0;i<parameters.Length;i++){
-                if(i==0){
+                if(!(isStatic && i==0)){
                     output+=",";
                 }
                 output+=GetIdentifier(parameters[i].Identifier);
@@ -300,7 +349,7 @@ class Python{
                 output+="self";
             }
             for(var i=0;i<parameters.Length;i++){
-                if(i==0){
+                if(!(isStatic && i==0)){
                     output+=",";
                 }
                 output+=GetIdentifier(parameters[i].Identifier);
@@ -314,7 +363,7 @@ class Python{
         throw new Exception(member.GetType().Name);
     }
 
-    public string Root(CompilationUnitSyntax root){
+    public string CompileRoot(CompilationUnitSyntax root){
         var output = "";
         foreach(var u in root.Usings){
             output+="import "+u.Name!.ToFullString()+"\n";
@@ -328,18 +377,23 @@ class Python{
 }
 
 static class Program{
-    static void Main(){
-        var input = File.ReadAllText("input/Program.cs");
-        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(input);
+
+    static void Run(string input, string output){
+        var code = File.ReadAllText(input);
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(code);
         CompilationUnitSyntax root = syntaxTree.GetCompilationUnitRoot();
         var python = new Python();
         try{
-            var output = python.Root(root);
-            File.WriteAllText("output/main.py", output);
+            File.WriteAllText(output, "#SUCCESS\n"+python.CompileRoot(root));
         }
         catch(Exception exception){
-            Console.WriteLine(exception);
-            File.WriteAllText("output/main.py", "");
+           var lines = ("#ERROR\n"+exception).ToString().Split('\n').Select(l=>'#'+l).ToArray();
+           File.WriteAllLines(output, lines);
         }
+    }
+
+    static void Main(string[] args){
+        var finalArgs = args[0].Split("--");
+        Run(finalArgs[0], finalArgs[1]);
     }
 }

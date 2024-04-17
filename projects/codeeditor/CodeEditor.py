@@ -64,12 +64,14 @@ class Program:
         codeEditor.SetText(Program.ReadFile("projects/test/Test.cs"))
         running=True
         pygame.key.set_repeat(500,25)
-        globals={"rects":[]}
+        globals={"objects":[],"pygame":pygame}
         while running:
             keys=pygame.key.get_pressed()
             for event in pygame.event.get():
                 if event.type==pygame.KEYDOWN:
-                    if keys[pygame.K_LCTRL]:
+                    if event.key==pygame.K_ESCAPE:
+                        globals={"objects":[],"pygame":pygame}
+                    elif keys[pygame.K_LCTRL]:
                         if event.key==pygame.K_r:
                             Program.WriteFile("projects/test/Test.cs",codeEditor.text)
                             result=subprocess.run(["compiler\\bin\\Debug\\net8.0\\CSharpToPython.exe","projects/test/Test.cs--projects/test/Test.py"],shell=True,capture_output=True,text=True).stdout
@@ -95,8 +97,8 @@ class Program:
                 if event.type==pygame.QUIT:
                     running=False
             codeEditor.Draw(surface)
-            for r in globals["rects"]:
-                pygame.draw.rect(surface,(0,0,255),pygame.Rect(r[0],r[1],r[2],r[3]))
+            for obj in globals["objects"]:
+                obj.Update(surface)
             pygame.display.flip()
         pygame.quit()
 Program.Main()

@@ -101,12 +101,14 @@ class Program{
         codeEditor.SetText(ReadFile("projects/test/Test.cs"));
         var running = true;
         pygame.key.set_repeat(500,25);
-        var globals={"rects"=[]};
+        var globals={"objects"=[], "pygame"=pygame};
         while(running){
             var keys = pygame.key.get_pressed();
             foreach(var @event in pygame.@event.@get()){
                 if(@event.type == pygame.KEYDOWN){
-                    if(keys[pygame.K_LCTRL]){
+                    if(@event.key == pygame.K_ESCAPE){
+                        var globals={"objects"=[], "pygame"=pygame};
+                    }else if(keys[pygame.K_LCTRL]){
                         if(@event.key == pygame.K_r){
                             WriteFile("projects/test/Test.cs", codeEditor.text);
                             var result = subprocess.run(["compiler\\bin\\Debug\\net8.0\\CSharpToPython.exe", "projects/test/Test.cs--projects/test/Test.py"], 
@@ -143,8 +145,8 @@ class Program{
                 }
             }
             codeEditor.Draw(surface);
-            foreach(var r in globals["rects"]){
-                pygame.draw.rect(surface, (0,0,255), pygame.Rect(r[0],r[1],r[2],r[3]));
+            foreach(var obj in globals["objects"]){
+                obj.Update(surface);
             }
             pygame.display.flip();
         }

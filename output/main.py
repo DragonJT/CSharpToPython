@@ -5,7 +5,8 @@ def Main():
     running=True
     text=""
     fontsize=25
-    font=pygame.font.SysFont(None,fontsize)
+    font=pygame.font.Font("RedditMono-Medium.ttf",fontsize)
+    pygame.key.set_repeat(500,25)
     while running:
         for event in pygame.event.get():
             if event.type==pygame.KEYDOWN:

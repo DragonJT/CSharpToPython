@@ -8,8 +8,9 @@ class Program{
         var running = true;
         var text = "";
         var fontsize = 25;
-        var font = pygame.font.SysFont(null, fontsize)
-        
+        var font = pygame.font.Font("RedditMono-Medium.ttf", fontsize)
+        pygame.key.set_repeat(500,25);
+
         while(running){
             foreach(var @event in pygame.@event.@get()){
                 if(@event.type == pygame.KEYDOWN){

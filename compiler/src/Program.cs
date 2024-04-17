@@ -1,8 +1,17 @@
 ﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis;
+using System.Security.Cryptography;
 
-static class Program{
+class Class(string name)
+{
+    public string name = name;
+    public List<string> fields = [];
+    public List<string> methods = [];
+}
+
+class Python{
+    readonly List<Class> classStack = [];
 
     static string GetIdentifier(SyntaxToken identifier){
         var text = identifier.ValueText;
@@ -27,29 +36,96 @@ static class Program{
         return output;
     }
 
-    static string GetExpression(ExpressionSyntax expression){
-        if(expression is InvocationExpressionSyntax invocationExpressionSyntax){
-            var output = "";
-            output+=GetExpression(invocationExpressionSyntax.Expression);
-            output+="(";
-            var args = invocationExpressionSyntax.ArgumentList.Arguments.ToArray();
-            for(var i=0;i<args.Length;i++){
-                output+=GetExpression(args[i].Expression);
-                if(i<args.Length-1){
-                    output+=",";
-                }
+    string GetArguments(ArgumentListSyntax arglist){
+        var output="(";
+        var args = arglist.Arguments.ToArray();
+        for(var i=0;i<args.Length;i++){
+            output+=GetExpression(args[i].Expression);
+            if(i<args.Length-1){
+                output+=",";
             }
-            output+=")";
-            return output;
+        }
+        return output+")";
+    }
+
+    static string GetFullname(List<string> names){
+        string fullname = names[0];
+        for(var i=1;i<names.Count;i++){
+            fullname = fullname+"."+names[i];
+        }
+        return fullname;
+    }
+
+    string GetMemberOrIdentifierExpression(ExpressionSyntax expression){
+        List<string> names = [];
+        while(expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax){
+            names.Insert(0, GetIdentifier(memberAccessExpressionSyntax.Name.Identifier));
+            expression = memberAccessExpressionSyntax.Expression;
+        }
+        if(expression is IdentifierNameSyntax identifierNameSyntax){
+            var name = GetIdentifier(identifierNameSyntax.Identifier);
+            var c = classStack[classStack.Count-1];
+            if(name == "this"){
+                names.Insert(0, "self");
+            }
+            else if(c.fields.Contains(name) || c.methods.Contains(name)){
+                names.Insert(0, "self");
+                names.Insert(1, name);
+            }
+            else{
+                names.Insert(0, name);
+            }
+            return GetFullname(names);
+        }
+        else{
+            return GetExpression(expression) +"."+ GetFullname(names);
+        }
+    }
+
+    string GetBinaryOperator(SyntaxToken binaryOperator){
+        return binaryOperator.ValueText switch{
+            "&&" => " and ",
+            "||" => " or ",
+            _ => binaryOperator.ValueText,
+        };
+    }
+
+    string GetExpression(ExpressionSyntax expression){
+        if(expression is InvocationExpressionSyntax invocationExpressionSyntax){
+            return GetExpression(invocationExpressionSyntax.Expression) + GetArguments(invocationExpressionSyntax.ArgumentList);
+        }
+        else if(expression is CollectionExpressionSyntax collectionExpressionSyntax){
+            if(collectionExpressionSyntax.Elements.Count == 0){
+                return "[]";
+            }
+            else{
+                throw new Exception(collectionExpressionSyntax.ToFullString());
+            }
+        }
+        else if(expression is ObjectCreationExpressionSyntax objectCreationExpressionSyntax){
+            return objectCreationExpressionSyntax.Type.ToString() + GetArguments(objectCreationExpressionSyntax.ArgumentList!);
+        }
+        else if(expression is ParenthesizedExpressionSyntax parenthesizedExpressionSyntax){
+            return "("+GetExpression(parenthesizedExpressionSyntax.Expression)+")";
         }
         else if(expression is BinaryExpressionSyntax binaryExpressionSyntax){
             return GetExpression(binaryExpressionSyntax.Left)
-                +binaryExpressionSyntax.OperatorToken.Text
+                +GetBinaryOperator(binaryExpressionSyntax.OperatorToken)
                 +GetExpression(binaryExpressionSyntax.Right);
         }
+        else if(expression is PostfixUnaryExpressionSyntax postfixUnaryExpressionSyntax){
+            if(postfixUnaryExpressionSyntax.OperatorToken.ValueText == "++"){
+                return GetExpression(postfixUnaryExpressionSyntax.Operand) + "+=1"; 
+            }
+            else if(postfixUnaryExpressionSyntax.OperatorToken.ValueText == "--"){
+                return GetExpression(postfixUnaryExpressionSyntax.Operand) + "-=1"; 
+            }
+            else{
+                throw new Exception(postfixUnaryExpressionSyntax.OperatorToken.ValueText);
+            }
+        }
         else if(expression is LiteralExpressionSyntax literalExpressionSyntax){
-            return literalExpressionSyntax.Kind() switch
-            {
+            return literalExpressionSyntax.Kind() switch {
                 SyntaxKind.CharacterLiteralExpression => "'" + GetString(literalExpressionSyntax.Token.ValueText) + "'",
                 SyntaxKind.StringLiteralExpression => '"' + GetString(literalExpressionSyntax.Token.ValueText) + '"',
                 SyntaxKind.TrueLiteralExpression => "True",
@@ -58,11 +134,8 @@ static class Program{
                 _ => literalExpressionSyntax.Token.ValueText
             };
         }
-        else if(expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax){
-            return GetExpression(memberAccessExpressionSyntax.Expression)+"."+GetIdentifier(memberAccessExpressionSyntax.Name.Identifier);
-        }
-        else if(expression is IdentifierNameSyntax identifierNameSyntax){
-            return GetIdentifier(identifierNameSyntax.Identifier);
+        else if(expression is MemberAccessExpressionSyntax || expression is IdentifierNameSyntax){
+            return GetMemberOrIdentifierExpression(expression);
         }
         else if(expression is AssignmentExpressionSyntax assignmentExpressionSyntax){
             return GetExpression(assignmentExpressionSyntax.Left)
@@ -85,24 +158,28 @@ static class Program{
             return output+")";
         }
         else if(expression is RangeExpressionSyntax rangeExpressionSyntax){
-            var rangeOperator = rangeExpressionSyntax.ToFullString();
-            if(rangeOperator.StartsWith("..^")){
-                return ":-"+rangeOperator[3..];
+            var left = rangeExpressionSyntax.LeftOperand;
+            var right = rangeExpressionSyntax.RightOperand;
+            var output = "";
+            if(left!=null){
+                output+=GetExpression(left);
             }
-            else{
-                throw new Exception(rangeOperator);
+            output+=":";
+            if(right!=null){
+                output+=GetExpression(right);
             }
+            return output;
         }
         else{
             throw new Exception(expression.GetType().Name);
         }
     }
 
-    static string GetLeadingWS(int depth){
+    string GetLeadingWS(int depth){
         return new string(' ', depth*4);
     }
 
-    static string GetBlock(StatementSyntax statementSyntax, int depth){
+    string GetBlock(StatementSyntax statementSyntax, int depth){
         if(statementSyntax is BlockSyntax block){
             return GetBody(block, depth+1);
         }
@@ -111,7 +188,7 @@ static class Program{
         }
     }
 
-    static string GetElse(ElseClauseSyntax? @else, int depth){
+    string GetElse(ElseClauseSyntax? @else, int depth){
         if(@else != null){
             if(@else.Statement is IfStatementSyntax elseifStatementSyntax){
                 return GetLeadingWS(depth) + "elif "+GetExpression(elseifStatementSyntax.Condition)+":\n"
@@ -125,7 +202,7 @@ static class Program{
         return "";
     }
 
-    static string GetStatement(StatementSyntax statement, int depth){
+    string GetStatement(StatementSyntax statement, int depth){
         if(statement is ExpressionStatementSyntax expressionStatementSyntax){
             return GetLeadingWS(depth) + GetExpression(expressionStatementSyntax.Expression)+"\n";
         }
@@ -150,7 +227,7 @@ static class Program{
         throw new Exception(statement.GetType().Name);
     }
 
-    static string GetBody(BlockSyntax block, int depth){
+    string GetBody(BlockSyntax block, int depth){
         var output = "";
         foreach(var statement in block.Statements){
             output+=GetStatement(statement, depth);
@@ -158,10 +235,8 @@ static class Program{
         return output;
     }
 
-    static string GetTypeName(TypeSyntax typeSyntax)
-    {
-        return typeSyntax switch
-        {
+    string GetTypeName(TypeSyntax typeSyntax){
+        return typeSyntax switch{
             PredefinedTypeSyntax predefinedType => predefinedType.Keyword.Text,
             IdentifierNameSyntax identifierName => GetIdentifier(identifierName.Identifier),
             QualifiedNameSyntax qualifiedName => $"{GetTypeName(qualifiedName.Left)}.{GetIdentifier(qualifiedName.Right.Identifier)}",
@@ -169,44 +244,102 @@ static class Program{
         };
     }
 
-    static string GetMember(MemberDeclarationSyntax member){
-        if(member is ClassDeclarationSyntax classDeclarationSyntax){
-            var output = "";
-            foreach(var m in classDeclarationSyntax.Members){
-                output+=GetMember(m);
+    Class GetClass(ClassDeclarationSyntax classDeclarationSyntax){
+        var @class = new Class(GetIdentifier(classDeclarationSyntax.Identifier));
+        foreach(var m in classDeclarationSyntax.Members){
+            if(m is FieldDeclarationSyntax fieldDeclarationSyntax){
+                foreach(var f in fieldDeclarationSyntax.Declaration.Variables){
+                    @class.fields.Add(GetIdentifier(f.Identifier));
+                }
             }
+            else if(m is MethodDeclarationSyntax methodDeclarationSyntax){
+                @class.methods.Add(GetIdentifier(methodDeclarationSyntax.Identifier));
+            }
+        }
+        return @class;
+    }
+
+    string GetMember(MemberDeclarationSyntax member, int depth){
+        if(member is ClassDeclarationSyntax classDeclarationSyntax){
+            var @class = @GetClass(classDeclarationSyntax);
+            classStack.Add(@class);
+            var output = GetLeadingWS(depth) + "class "+@class.name+":\n";
+            foreach(var m in classDeclarationSyntax.Members){
+                output+=GetMember(m, depth+1);
+            }
+            classStack.RemoveAt(classStack.Count-1);
+            return output;
+        }
+        else if(member is FieldDeclarationSyntax){
+            return "";
+        }
+        else if(member is ConstructorDeclarationSyntax constructorDeclarationSyntax){
+            var output = GetLeadingWS(depth)+"def __init__(";
+            var parameters = constructorDeclarationSyntax.ParameterList.Parameters.ToArray();
+            bool isStatic = constructorDeclarationSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+            if(!isStatic){
+                output+="self";
+            }
+            for(var i=0;i<parameters.Length;i++){
+                if(i==0){
+                    output+=",";
+                }
+                output+=GetIdentifier(parameters[i].Identifier);
+                /*output+=":";
+                output+=GetTypeName(parameters[i].Type!);*/
+            }
+            output+="):\n";
+            output+=GetBody(constructorDeclarationSyntax.Body!, depth+1);
             return output;
         }
         else if(member is MethodDeclarationSyntax methodDeclarationSyntax){
-            var output = "def "+GetIdentifier(methodDeclarationSyntax.Identifier)+"(";
+            var output =  GetLeadingWS(depth)+"def "+GetIdentifier(methodDeclarationSyntax.Identifier)+"(";
             var parameters = methodDeclarationSyntax.ParameterList.Parameters.ToArray();
+            bool isStatic = methodDeclarationSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword));
+            if(!isStatic){
+                output+="self";
+            }
             for(var i=0;i<parameters.Length;i++){
-                output+=GetIdentifier(parameters[i].Identifier);
-                output+=":";
-                output+=GetTypeName(parameters[i].Type!);
-                if(i<parameters.Length-1){
+                if(i==0){
                     output+=",";
                 }
+                output+=GetIdentifier(parameters[i].Identifier);
+                /*output+=":";
+                output+=GetTypeName(parameters[i].Type!);*/
             }
             output+="):\n";
-            output+=GetBody(methodDeclarationSyntax.Body!, 1);
+            output+=GetBody(methodDeclarationSyntax.Body!, depth+1);
             return output;
         }
         throw new Exception(member.GetType().Name);
     }
 
-    static void Main(){
-        var input = File.ReadAllText("input/Program.cs");
-        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(input);
-        CompilationUnitSyntax root = syntaxTree.GetCompilationUnitRoot();
+    public string Root(CompilationUnitSyntax root){
         var output = "";
         foreach(var u in root.Usings){
             output+="import "+u.Name!.ToFullString()+"\n";
         }
         foreach(var member in root.Members){
-            output+=GetMember(member);
+            output+=GetMember(member, 0);
         }
-        output+="Main()\n";
-        File.WriteAllText("output/main.py", output);
+        output+="Program.Main()\n";
+        return output;
+    }
+}
+
+static class Program{
+    static void Main(){
+        var input = File.ReadAllText("input/Program.cs");
+        SyntaxTree syntaxTree = CSharpSyntaxTree.ParseText(input);
+        CompilationUnitSyntax root = syntaxTree.GetCompilationUnitRoot();
+        var python = new Python();
+        try{
+            var output = python.Root(root);
+            File.WriteAllText("output/main.py", output);
+        }
+        catch(Exception exception){
+            Console.WriteLine(exception);
+            File.WriteAllText("output/main.py", "");
+        }
     }
 }

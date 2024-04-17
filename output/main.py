@@ -2,26 +2,30 @@ import pygame
 def Main():
     pygame.init()
     screen=pygame.display.set_mode((1280,780))
-    clock=pygame.time.Clock()
     running=True
-    player_pos=pygame.Vector2(screen.get_width()/2,screen.get_height()/2)
-    dt=0
+    text=""
+    fontsize=25
+    font=pygame.font.SysFont(None,fontsize)
     while running:
         for event in pygame.event.get():
+            if event.type==pygame.KEYDOWN:
+                if event.key==pygame.K_RETURN:
+                    text+='\n'
+                elif event.key==pygame.K_BACKSPACE:
+                    if event.key==pygame.K_BACKSPACE:
+                        text=text[:-1]
+                    else:
+                        text+=event.unicode
+                else:
+                    text+=event.unicode
             if event.type==pygame.QUIT:
                 running=False
-        screen.fill("purple")
-        pygame.draw.circle(screen,"red",player_pos,40)
-        keys=pygame.key.get_pressed()
-        if keys[pygame.K_w]:
-            player_pos.y-=300*dt
-        if keys[pygame.K_s]:
-            player_pos.y+=300*dt
-        if keys[pygame.K_a]:
-            player_pos.x-=300*dt
-        if keys[pygame.K_d]:
-            player_pos.x+=300*dt
+        screen.fill((220,220,220))
+        y=fontsize
+        for l in text.split('\n'):
+            img=font.render(l,True,(0,20,45))
+            screen.blit(img,(20,y))
+            y+=fontsize
         pygame.display.flip()
-        dt=clock.tick(60)/1000
     pygame.quit()
 Main()

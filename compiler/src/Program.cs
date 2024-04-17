@@ -12,6 +12,21 @@ static class Program{
         return text;
     }
 
+    static string GetChar(char c){
+        if(c=='\n'){
+            return "\\n";
+        }
+        return c.ToString();
+    }
+
+    static string GetString(string str){
+        string output = "";
+        foreach(var c in str){
+            output+=GetChar(c);
+        }
+        return output;
+    }
+
     static string GetExpression(ExpressionSyntax expression){
         if(expression is InvocationExpressionSyntax invocationExpressionSyntax){
             var output = "";
@@ -35,9 +50,11 @@ static class Program{
         else if(expression is LiteralExpressionSyntax literalExpressionSyntax){
             return literalExpressionSyntax.Kind() switch
             {
-                SyntaxKind.StringLiteralExpression => '"' + literalExpressionSyntax.Token.ValueText + '"',
+                SyntaxKind.CharacterLiteralExpression => "'" + GetString(literalExpressionSyntax.Token.ValueText) + "'",
+                SyntaxKind.StringLiteralExpression => '"' + GetString(literalExpressionSyntax.Token.ValueText) + '"',
                 SyntaxKind.TrueLiteralExpression => "True",
                 SyntaxKind.FalseLiteralExpression => "False",
+                SyntaxKind.NullLiteralExpression => "None",
                 _ => literalExpressionSyntax.Token.ValueText
             };
         }
@@ -67,6 +84,15 @@ static class Program{
             }
             return output+")";
         }
+        else if(expression is RangeExpressionSyntax rangeExpressionSyntax){
+            var rangeOperator = rangeExpressionSyntax.ToFullString();
+            if(rangeOperator.StartsWith("..^")){
+                return ":-"+rangeOperator[3..];
+            }
+            else{
+                throw new Exception(rangeOperator);
+            }
+        }
         else{
             throw new Exception(expression.GetType().Name);
         }
@@ -83,6 +109,20 @@ static class Program{
         else{
             return GetStatement(statementSyntax, depth+1);
         }
+    }
+
+    static string GetElse(ElseClauseSyntax? @else, int depth){
+        if(@else != null){
+            if(@else.Statement is IfStatementSyntax elseifStatementSyntax){
+                return GetLeadingWS(depth) + "elif "+GetExpression(elseifStatementSyntax.Condition)+":\n"
+                    + GetBlock(@else.Statement, depth)
+                    + GetElse(elseifStatementSyntax.Else, depth);
+            }
+            else{
+                return GetLeadingWS(depth) + "else:\n" + GetBlock(@else.Statement, depth);
+            }
+        }
+        return "";
     }
 
     static string GetStatement(StatementSyntax statement, int depth){
@@ -104,7 +144,8 @@ static class Program{
         }
         else if(statement is IfStatementSyntax ifStatementSyntax){
             return GetLeadingWS(depth) + "if "+GetExpression(ifStatementSyntax.Condition)+":\n"
-                + GetBlock(ifStatementSyntax.Statement, depth);
+                + GetBlock(ifStatementSyntax.Statement, depth)
+                + GetElse(ifStatementSyntax.Else, depth);            
         }
         throw new Exception(statement.GetType().Name);
     }

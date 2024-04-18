@@ -66,7 +66,7 @@ class Python{
         return fullname;
     }
 
-    string GetMemberOrIdentifierExpression(ExpressionSyntax expression){
+    string GetMemberOrIdentifierOrThisExpression(ExpressionSyntax expression){
         List<string> names = [];
         while(expression is MemberAccessExpressionSyntax memberAccessExpressionSyntax){
             names.Insert(0, GetIdentifier(memberAccessExpressionSyntax.Name.Identifier));
@@ -178,8 +178,8 @@ class Python{
                 _ => literalExpressionSyntax.Token.ValueText
             };
         }
-        else if(expression is MemberAccessExpressionSyntax || expression is IdentifierNameSyntax){
-            return GetMemberOrIdentifierExpression(expression);
+        else if(expression is MemberAccessExpressionSyntax || expression is IdentifierNameSyntax || expression is ThisExpressionSyntax){
+            return GetMemberOrIdentifierOrThisExpression(expression);
         }
         else if(expression is AssignmentExpressionSyntax assignmentExpressionSyntax){
             var op = assignmentExpressionSyntax.OperatorToken.ValueText;

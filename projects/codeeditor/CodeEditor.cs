@@ -6,13 +6,11 @@ class CodeEditor {
     string text;
     int cursor;
     string[] lines;
-    Graphics graphics;
 
-    CodeEditor(Rect _rect, string _text, Graphics _graphics){
+    CodeEditor(Rect _rect, string _text){
         rect = _rect;
         SetText(_text);
         cursor = 0;
-        graphics = _graphics;
     }
 
     void SetText(string _text){
@@ -44,49 +42,36 @@ class CodeEditor {
         }    
     }
 
-    void OnEvent(Event @event){
+    void Save(){
+        File.WriteFile("projects/test/Test.cs", text);
+    }
+
+    void OnEvent(Graphics graphics, Event @event){
         if(@event.type == pygame.KEYDOWN){
-            //var keys = pygame.key.get_pressed();
-            /*if(keys[pygame.K_LCTRL]){
-                if(@event.key == pygame.K_r){
-                    File.WriteFile("projects/test/Test.cs", text);
-                    var result = subprocess.run(["compiler\\bin\\Debug\\net8.0\\CSharpToPython.exe", "projects/test/Test.cs--projects/test/Test.py"], 
-                        shell:true, capture_output:true, text:true).stdout;
-                    if(result == "ERROR"){
-                        print(File.ReadFile("projects/test/Test.py"));
-                    }
-                    else{
-                        exec(File.ReadFile("projects/test/Test.py"), globals);
-                    }
+            var keys = pygame.key.get_pressed();
+            if(keys[pygame.K_LCTRL]){
+                if(@event.key == pygame.K_TAB){
+                    graphics.NextUI();
                 }
-                else if(@event.key == pygame.K_s){
-                    File.WriteFile("projects/test/Test.cs", text);
-                }
-                else if(@event.key == pygame.K_TAB){
-                    active++;
-                    if(active >= len(uis)){
-                        active = 0;
-                    }
-                }
-            }else{*/
-            if(@event.key == pygame.K_RETURN){
-                Insert("\n");
-            }else if(@event.key == pygame.K_TAB){
-                Insert("    ");
-            }else if(@event.key == pygame.K_BACKSPACE){
-                Backspace();
-            }else if(@event.key == pygame.K_LEFT){
-                CursorLeft();
-            }else if(@event.key == pygame.K_RIGHT){
-                CursorRight();
             }else{
-                Insert(@event.unicode);
+                if(@event.key == pygame.K_RETURN){
+                    Insert("\n");
+                }else if(@event.key == pygame.K_TAB){
+                    Insert("    ");
+                }else if(@event.key == pygame.K_BACKSPACE){
+                    Backspace();
+                }else if(@event.key == pygame.K_LEFT){
+                    CursorLeft();
+                }else if(@event.key == pygame.K_RIGHT){
+                    CursorRight();
+                }else{
+                    Insert(@event.unicode);
+                }
             }
-            //}
         }
     }
 
-    void Draw(bool active){
+    void Draw(Graphics graphics, bool active){
         var y = rect[1];
         var x = rect[0];
         var bgcolor = active?(180,180,180):(200,200,200);
@@ -130,51 +115,64 @@ class GameObject{
     }
 }
 
+class Button{
+    Rect rect;
+    string text;
+    Action onclick;
+
+    Button(Rect _rect, string _text, Action _onclick){
+        rect = _rect;
+        text = _text;
+        onclick = _onclick;
+    }
+
+    void Save(){}
+
+    void OnEvent(Graphics graphics, Event @event){
+        if(@event.type == pygame.KEYDOWN){
+            if(@event.key == pygame.K_RETURN){
+                onclick();
+            }else if(@event.key == pygame.K_TAB){
+                graphics.NextUI();
+            }
+        }
+    }
+
+    void Draw(Graphics graphics, bool active){
+        var bgcolor = active?(180,180,180):(200,200,200);
+        graphics.DrawRect(rect, bgcolor);
+        var textColor = (0,50,100);
+        graphics.DrawText((rect[0],rect[1]), text, textColor);
+    }
+}
+
 class TreeView{
     Rect rect;
     GameObject[] gameObjects;
-    Graphics graphics;
 
-    TreeView(Rect _rect, Graphics _graphics){
+    TreeView(Rect _rect){
         gameObjects = [];
         rect = _rect;
-        graphics = _graphics;
     }
+
+    void Save(){}
 
     void Add(GameObject gameObject){
         gameObjects.append(gameObject);
     }
 
-    void OnEvent(Event @event){
+    void OnEvent(Graphics graphics, Event @event){
+        if(@event.type == pygame.KEYDOWN){
+            if(@event.key == pygame.K_TAB){
+                graphics.NextUI();
+            }
+        }
     }
 
-    void Draw(bool active){
+    void Draw(Graphics graphics, bool active){
         var bgcolor = active?(180,180,180):(200,200,200);
         graphics.DrawRect(rect, bgcolor);
-    }
-}
-
-class UIs{
-    object[] uis;
-    int active;
-
-    UIs(){
-        uis = [];
-        active = 1;
-    }
-
-    void Add(object ui){
-        uis.append(ui);
-    }
-
-    void OnEvent(Event @event){
-        uis[active].OnEvent(@event);
-    }
-
-    void Draw(){
-        foreach(var i in range(0, len(uis))){
-            uis[i].Draw(i==active);
-        }
+        graphics.DrawText((rect[0],rect[1]), "TreeView", (0,50,100));
     }
 }
 
@@ -194,6 +192,9 @@ class File{
 }
 
 class Graphics{
+    object[] objects;
+    object[] uis;
+    int activeUI;
     Surface surface;
     Vector2 screenSize;
     Font font;
@@ -206,10 +207,19 @@ class Graphics{
         fontsize = _fontsize;
         linesize = fontsize * 1.4;
         screenSize = _screenSize;
+        uis = [];
+        objects = [];
+        activeUI = 0;
     }
 
     void Clear(Color color){
         surface.fill(color);
+    }
+
+    void Save(){
+        foreach(var u in uis){
+            u.Save();
+        }
     }
 
     void DrawText(Vector2 position, string text, Color color){
@@ -220,37 +230,93 @@ class Graphics{
     void DrawRect(Rect rect, Color color){
         pygame.draw.rect(surface, color, pygame.Rect(rect[0], rect[1], rect[2], rect[3]));
     }
+
+    void AddObject(object obj){
+        objects.append(obj);
+    }
+
+    void DrawObjects(){
+        foreach(var obj in objects){
+            obj.Draw();
+        }
+    }
+
+    void ClearObjects(){
+        objects.clear();
+    }
+
+    void AddUI(object ui){
+        uis.append(ui);
+    }
+
+    void OnEvent(Event @event){
+        uis[activeUI].OnEvent(this, @event);
+    }
+
+    void DrawUI(){
+        foreach(var i in range(0, len(uis))){
+            uis[i].Draw(this, i==activeUI);
+        }
+    }
+
+    void NextUI(){
+        activeUI++;
+        if(activeUI >= len(uis)){
+            activeUI = 0;
+        }
+    }
 }
 
 class Program {
-    static void Main(){
-        pygame.init();
-        var graphics = new Graphics((1280,780), "RedditMono-Medium.ttf", 16);
+    Graphics graphics;
 
-        var uis = new UIs();
-        uis.Add(new TreeView((20,20,280,740), graphics));
-        uis.Add(new CodeEditor((320,20,900,740), File.ReadFile("projects/test/Test.cs"), graphics));
+    void Save(){
+        graphics.Save();
+    }
+
+    void Run(){
+        graphics.Save();
+        var result = subprocess.run(["compiler\\bin\\Debug\\net8.0\\CSharpToPython.exe", "projects/test/Test.cs--projects/test/Test.py"], 
+            shell:true, capture_output:true, text:true).stdout;
+        if(result == "ERROR"){
+            print(File.ReadFile("projects/test/Test.py"));
+        }
+        else{
+            var globals = {"graphics"=graphics};
+            exec(File.ReadFile("projects/test/Test.py"), globals);
+        }
+    }
+
+    void Start(){
+        pygame.init();
+        graphics = new Graphics((1280,780), "RedditMono-Medium.ttf", 16);
+        graphics.AddUI(new TreeView((20,80,280,680)));
+        graphics.AddUI(new CodeEditor((320,80,900,680), File.ReadFile("projects/test/Test.cs")));
+        graphics.AddUI(new Button((500,20,100,40), ">", Run));
+        graphics.AddUI(new Button((780,20,100,40), "save", Save));
+
         var running = true;
         pygame.key.set_repeat(500,25);
-        //var globals={"objects"=[], "pygame"=pygame};
         while(running){
             foreach(var @event in pygame.@event.@get()){
-                /*if(@event.type == pygame.KEYDOWN && @event.key == pygame.K_ESCAPE){
-                    globals={"objects"=[], "pygame"=pygame};
-                }else*/
-                if(@event.type == pygame.QUIT){
+                if(@event.type == pygame.KEYDOWN && @event.key == pygame.K_ESCAPE){
+                    graphics.ClearObjects();
+                }else if(@event.type == pygame.QUIT){
                     running = false;
                 }else{
-                    uis.OnEvent(@event);
+                    graphics.OnEvent(@event);
                 }
             }
             graphics.Clear((220, 220, 220));
-            uis.Draw();
-            /*foreach(var obj in globals["objects"]){
-                obj.Update();
-            }*/
+            graphics.DrawUI();
+            graphics.DrawObjects();
             pygame.display.flip();
         }
         pygame.quit();
+    }
+
+    static void Main(){
+        var program = new Program();
+        program.Start();
     }
 }

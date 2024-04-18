@@ -78,7 +78,7 @@ class Python{
         }
         else if(expression is IdentifierNameSyntax identifierNameSyntax){
             var name = GetIdentifier(identifierNameSyntax.Identifier);
-            var c = classStack[classStack.Count-1];
+            var c = classStack[^1];
             if(c.fields.Contains(name)){ 
                 names.Insert(0, "self");
                 names.Insert(1, name);
@@ -111,11 +111,13 @@ class Python{
     }
 
     string GetExpression(ExpressionSyntax expression, bool isDictionary = false){
-        if(isDictionary){
-            Console.WriteLine(expression.GetType().Name+"__"+expression.ToFullString());
-        }
         if(expression is InvocationExpressionSyntax invocationExpressionSyntax){
             return GetExpression(invocationExpressionSyntax.Expression) + GetArguments(invocationExpressionSyntax.ArgumentList);
+        }
+        else if(expression is ConditionalExpressionSyntax conditionalExpressionSyntax){
+            return GetExpression(conditionalExpressionSyntax.WhenTrue)+" if "
+                + GetExpression(conditionalExpressionSyntax.Condition)+" else "
+                + GetExpression(conditionalExpressionSyntax.WhenFalse);
         }
         else if(expression is CollectionExpressionSyntax collectionExpressionSyntax){
             var elements = collectionExpressionSyntax.Elements.ToArray();
@@ -277,6 +279,9 @@ class Python{
 
     string GetBody(BlockSyntax block, int depth){
         var output = "";
+        if(block.Statements.Count == 0){
+            return GetLeadingWS(depth) + "pass\n";
+        }
         foreach(var statement in block.Statements){
             output+=GetStatement(statement, depth);
         }

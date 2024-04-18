@@ -253,12 +253,14 @@ class Graphics{
     Surface surface;
     Vector2 screenSize;
     Font font;
+    Font font2;
     float fontsize;
     float linesize;
 
     Graphics(Vector2 _screenSize, string _font, int _fontsize){
         surface = pygame.display.set_mode((_screenSize[0], _screenSize[1]));
         font = pygame.font.Font(_font, _fontsize);
+        font2 = pygame.font.Font(_font, 40);
         fontsize = _fontsize;
         linesize = fontsize * 1.4;
         screenSize = _screenSize;
@@ -279,6 +281,11 @@ class Graphics{
 
     void DrawText(Vector2 position, string text, Color color){
         var img = font.render(text, true, color);
+        surface.blit(img, position);
+    }
+
+    void DrawText2(Vector2 position, string text, Color color){
+        var img = font2.render(text, true, color);
         surface.blit(img, position);
     }
 

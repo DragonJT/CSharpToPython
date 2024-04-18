@@ -28,7 +28,6 @@ class CodeEditor:
         elif locationID[1]<self.scrollY+10:
             self.scrollY=max(locationID[1]-10,0)
     def SetCursorLocationID(self,locationID):
-        print(locationID)
         _cursor=0
         for i in range(0,locationID[1]):
             _cursor+=len(self.lines[i])+1
@@ -156,6 +155,7 @@ class Graphics:
     def __init__(self,_screenSize,_font,_fontsize):
         self.surface=pygame.display.set_mode((_screenSize[0],_screenSize[1]))
         self.font=pygame.font.Font(_font,_fontsize)
+        self.font2=pygame.font.Font(_font,40)
         self.fontsize=_fontsize
         self.linesize=self.fontsize*1.4
         self.screenSize=_screenSize
@@ -169,6 +169,9 @@ class Graphics:
             u.Save()
     def DrawText(self,position,text,color):
         img=self.font.render(text,True,color)
+        self.surface.blit(img,position)
+    def DrawText2(self,position,text,color):
+        img=self.font2.render(text,True,color)
         self.surface.blit(img,position)
     def DrawRect(self,rect,color):
         pygame.draw.rect(self.surface,color,pygame.Rect(rect[0],rect[1],rect[2],rect[3]))

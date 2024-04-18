@@ -7,12 +7,14 @@ class CodeEditor {
     int cursor;
     string[] lines;
     int scrollY;
+    int cursorX;
 
     CodeEditor(Rect _rect, string _text){
         rect = _rect;
         SetText(_text);
         cursor = 0;
         scrollY = 0;
+        cursorX = 0;
     }
 
     void SetText(string _text){
@@ -32,14 +34,40 @@ class CodeEditor {
         }
     }
 
-    void SetCursor(int _cursor){
+    void SetCursor(int _cursor, bool updateCursorX = true){
         cursor = _cursor;
         var locationID = GetCursorLocationID();
+        if(updateCursorX){
+            cursorX = locationID[0];
+        }
         if(locationID[1]>scrollY+20){
             scrollY = locationID[1] - 20;
         }
         else if(locationID[1]<scrollY+10){
             scrollY = max(locationID[1] - 10, 0);
+        }
+    }
+
+    void SetCursorLocationID(Vector2i locationID){
+        var _cursor = 0;
+        foreach(var i in range(0,locationID[1])){
+            _cursor+=len(lines[i])+1;
+        }
+        _cursor+=min(locationID[0], len(lines[locationID[1]]));
+        SetCursor(_cursor, false);
+    }
+
+    void CursorUp(){
+        var cursorLine = GetCursorLocationID()[1];
+        if(cursorLine>0){
+            SetCursorLocationID((cursorX, cursorLine-1));
+        }
+    }
+
+    void CursorDown(){
+        var cursorLine = GetCursorLocationID()[1];
+        if(cursorLine<len(lines)-1){
+            SetCursorLocationID((cursorX, cursorLine+1));
         }
     }
 
@@ -73,6 +101,10 @@ class CodeEditor {
                     Insert("    ");
                 }else if(@event.key == pygame.K_BACKSPACE){
                     Backspace();
+                }else if(@event.key == pygame.K_UP){
+                    CursorUp();
+                }else if(@event.key == pygame.K_DOWN){
+                    CursorDown();
                 }else if(@event.key == pygame.K_LEFT){
                     CursorLeft();
                 }else if(@event.key == pygame.K_RIGHT){
@@ -120,9 +152,9 @@ class CodeEditor {
             }
             else{
                 var locationID = GetCursorLocationID();
-                var cursorX = graphics.font.size(lines[locationID[1]][0..locationID[0]])[0] + x;
+                var _cursorX = graphics.font.size(lines[locationID[1]][0..locationID[0]])[0] + x;
                 var cursorY = graphics.linesize * locationID[1] + y;
-                graphics.DrawRect((cursorX, cursorY, 2, graphics.fontsize), textColor);
+                graphics.DrawRect((_cursorX, cursorY, 2, graphics.fontsize), textColor);
             }
         }
     }

@@ -358,6 +358,10 @@ class Python{
                     output+=",";
                 }
                 output+=GetIdentifier(parameters[i].Identifier);
+                var defaultParameter = parameters[i].Default;
+                if(defaultParameter!=null){
+                    output+="="+GetExpression(defaultParameter.Value);
+                }
                 /*output+=":";
                 output+=GetTypeName(parameters[i].Type!);*/
             }

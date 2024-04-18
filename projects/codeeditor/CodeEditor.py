@@ -7,6 +7,7 @@ class CodeEditor:
         self.SetText(_text)
         self.cursor=0
         self.scrollY=0
+        self.cursorX=0
     def SetText(self,_text):
         self.text=_text
         self.lines=self.text.split('\n')
@@ -17,13 +18,30 @@ class CodeEditor:
         if self.cursor>0:
             self.SetText(self.text[:(self.cursor-1)]+self.text[self.cursor:])
             self.cursor-=1
-    def SetCursor(self,_cursor):
+    def SetCursor(self,_cursor,updateCursorX=True):
         self.cursor=_cursor
         locationID=self.GetCursorLocationID()
+        if updateCursorX:
+            self.cursorX=locationID[0]
         if locationID[1]>self.scrollY+20:
             self.scrollY=locationID[1]-20
         elif locationID[1]<self.scrollY+10:
             self.scrollY=max(locationID[1]-10,0)
+    def SetCursorLocationID(self,locationID):
+        print(locationID)
+        _cursor=0
+        for i in range(0,locationID[1]):
+            _cursor+=len(self.lines[i])+1
+        _cursor+=min(locationID[0],len(self.lines[locationID[1]]))
+        self.SetCursor(_cursor,False)
+    def CursorUp(self):
+        cursorLine=self.GetCursorLocationID()[1]
+        if cursorLine>0:
+            self.SetCursorLocationID((self.cursorX,cursorLine-1))
+    def CursorDown(self):
+        cursorLine=self.GetCursorLocationID()[1]
+        if cursorLine<len(self.lines)-1:
+            self.SetCursorLocationID((self.cursorX,cursorLine+1))
     def CursorLeft(self):
         if self.cursor>0:
             self.SetCursor(self.cursor-1)
@@ -45,6 +63,10 @@ class CodeEditor:
                     self.Insert("    ")
                 elif event.key==pygame.K_BACKSPACE:
                     self.Backspace()
+                elif event.key==pygame.K_UP:
+                    self.CursorUp()
+                elif event.key==pygame.K_DOWN:
+                    self.CursorDown()
                 elif event.key==pygame.K_LEFT:
                     self.CursorLeft()
                 elif event.key==pygame.K_RIGHT:
@@ -79,9 +101,9 @@ class CodeEditor:
                 graphics.DrawRect((x,y,2,graphics.fontsize),textColor)
             else:
                 locationID=self.GetCursorLocationID()
-                cursorX=graphics.font.size(self.lines[locationID[1]][0:locationID[0]])[0]+x
+                _cursorX=graphics.font.size(self.lines[locationID[1]][0:locationID[0]])[0]+x
                 cursorY=graphics.linesize*locationID[1]+y
-                graphics.DrawRect((cursorX,cursorY,2,graphics.fontsize),textColor)
+                graphics.DrawRect((_cursorX,cursorY,2,graphics.fontsize),textColor)
 class GameObject:
     def __init__(self,_name):
         self.name=_name

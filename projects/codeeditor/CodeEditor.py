@@ -6,6 +6,7 @@ class CodeEditor:
         self.rect=_rect
         self.SetText(_text)
         self.cursor=0
+        self.scrollY=0
     def SetText(self,_text):
         self.text=_text
         self.lines=self.text.split('\n')
@@ -16,12 +17,19 @@ class CodeEditor:
         if self.cursor>0:
             self.SetText(self.text[:(self.cursor-1)]+self.text[self.cursor:])
             self.cursor-=1
+    def SetCursor(self,_cursor):
+        self.cursor=_cursor
+        locationID=self.GetCursorLocationID()
+        if locationID[1]>self.scrollY+20:
+            self.scrollY=locationID[1]-20
+        elif locationID[1]<self.scrollY+10:
+            self.scrollY=max(locationID[1]-10,0)
     def CursorLeft(self):
         if self.cursor>0:
-            self.cursor-=1
+            self.SetCursor(self.cursor-1)
     def CursorRight(self):
         if self.cursor<len(self.text):
-            self.cursor+=1
+            self.SetCursor(self.cursor+1)
     def Save(self):
         File.WriteFile("projects/test/Test.cs",self.text)
     def OnEvent(self,graphics,event):
@@ -43,30 +51,37 @@ class CodeEditor:
                     self.CursorRight()
                 else:
                     self.Insert(event.unicode)
+    def GetCursorLocationID(self):
+        lineID=0
+        numCharacters=0
+        for line in self.lines:
+            charsInLine=len(line)
+            if self.cursor>=numCharacters and self.cursor<=numCharacters+charsInLine:
+                cursorIsCharsFromStartOfLine=self.cursor-numCharacters
+                return (cursorIsCharsFromStartOfLine,lineID)
+            numCharacters+=charsInLine+1
+            lineID+=1
     def Draw(self,graphics,active):
         y=self.rect[1]
         x=self.rect[0]
         bgcolor=(180,180,180) if active else (200,200,200)
         graphics.DrawRect(self.rect,bgcolor)
         textColor=(0,20,45)
-        for l in self.lines:
-            graphics.DrawText((x,y),l,textColor)
-            y+=graphics.linesize
+        numLines=len(self.lines)
+        for i in range(self.scrollY,self.scrollY+30):
+            if i>=0 and i<numLines:
+                graphics.DrawText((x,y),self.lines[i],textColor)
+                y+=graphics.linesize
         if active:
             cursorYOffset=graphics.fontsize*0.1
-            y=self.rect[1]
-            numCharacters=0
+            y=self.rect[1]-self.scrollY*graphics.linesize
             if len(self.lines)==0:
                 graphics.DrawRect((x,y,2,graphics.fontsize),textColor)
             else:
-                for l in self.lines:
-                    charsInLine=len(l)
-                    if self.cursor>=numCharacters and self.cursor<=numCharacters+charsInLine:
-                        cursorIsCharsFromStartOfLine=self.cursor-numCharacters
-                        cursorX=graphics.font.size(l[0:cursorIsCharsFromStartOfLine])[0]+x
-                        graphics.DrawRect((cursorX,y+cursorYOffset,2,graphics.fontsize),textColor)
-                    numCharacters+=charsInLine+1
-                    y+=graphics.linesize
+                locationID=self.GetCursorLocationID()
+                cursorX=graphics.font.size(self.lines[locationID[1]][0:locationID[0]])[0]+x
+                cursorY=graphics.linesize*locationID[1]+y
+                graphics.DrawRect((cursorX,cursorY,2,graphics.fontsize),textColor)
 class GameObject:
     def __init__(self,_name):
         self.name=_name

@@ -6,11 +6,13 @@ class CodeEditor {
     string text;
     int cursor;
     string[] lines;
+    int scrollY;
 
     CodeEditor(Rect _rect, string _text){
         rect = _rect;
         SetText(_text);
         cursor = 0;
+        scrollY = 0;
     }
 
     void SetText(string _text){
@@ -30,15 +32,26 @@ class CodeEditor {
         }
     }
 
+    void SetCursor(int _cursor){
+        cursor = _cursor;
+        var locationID = GetCursorLocationID();
+        if(locationID[1]>scrollY+20){
+            scrollY = locationID[1] - 20;
+        }
+        else if(locationID[1]<scrollY+10){
+            scrollY = max(locationID[1] - 10, 0);
+        }
+    }
+
     void CursorLeft(){
         if(cursor>0){
-            cursor--;
+            SetCursor(cursor-1);
         }
     }
 
     void CursorRight(){
         if(cursor<len(text)){
-            cursor++;
+            SetCursor(cursor+1);
         }    
     }
 
@@ -71,35 +84,45 @@ class CodeEditor {
         }
     }
 
+    Vector2i GetCursorLocationID(){
+        var lineID = 0;
+        var numCharacters = 0;
+        foreach(var line in lines){
+            var charsInLine = len(line);
+            if(cursor>=numCharacters && cursor<= numCharacters+charsInLine){
+                var cursorIsCharsFromStartOfLine = cursor - numCharacters;
+                return (cursorIsCharsFromStartOfLine, lineID);
+            }
+            numCharacters+=charsInLine+1;
+            lineID++;
+        }
+    }
+
     void Draw(Graphics graphics, bool active){
         var y = rect[1];
         var x = rect[0];
         var bgcolor = active?(180,180,180):(200,200,200);
         graphics.DrawRect(rect, bgcolor);
         var textColor = (0,20,45);
-        foreach(var l in lines){
-            graphics.DrawText((x,y), l, textColor);
-            y+=graphics.linesize;
+        var numLines = len(lines);
+        foreach(var i in range(scrollY, scrollY+30)){
+            if(i>=0 && i<numLines){
+                graphics.DrawText((x,y), lines[i], textColor);
+                y+=graphics.linesize;
+            }
         }
 
         if(active){
             var cursorYOffset = graphics.fontsize*0.1;
-            y = rect[1];
-            var numCharacters = 0;
+            y = rect[1] - scrollY * graphics.linesize;
             if(len(lines) == 0){
                 graphics.DrawRect((x, y, 2, graphics.fontsize), textColor);
             }
             else{
-                foreach(var l in lines){
-                    var charsInLine = len(l);
-                    if(cursor>=numCharacters && cursor<= numCharacters+charsInLine){
-                        var cursorIsCharsFromStartOfLine = cursor - numCharacters;
-                        var cursorX = graphics.font.size(l[0..cursorIsCharsFromStartOfLine])[0] + x;
-                        graphics.DrawRect((cursorX, y+cursorYOffset, 2, graphics.fontsize), textColor);
-                    }
-                    numCharacters+=charsInLine+1;
-                    y+=graphics.linesize;
-                }
+                var locationID = GetCursorLocationID();
+                var cursorX = graphics.font.size(lines[locationID[1]][0..locationID[0]])[0] + x;
+                var cursorY = graphics.linesize * locationID[1] + y;
+                graphics.DrawRect((cursorX, cursorY, 2, graphics.fontsize), textColor);
             }
         }
     }

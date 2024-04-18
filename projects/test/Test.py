@@ -18,4 +18,5 @@ class Program:
         graphics.AddObject(ColoredRect((0,0,255),(120,120,60,60)))
         graphics.AddObject(ColoredRect((100,255,0),(200,200,50,50)))
         graphics.AddObject(ColoredText((0,50,100),(150,150),"HelloWorld"))
+        graphics.AddObject(ColoredText((255,255,255),(200,200),"MOOO"))
 Program.Main()
